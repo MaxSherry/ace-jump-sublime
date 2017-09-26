@@ -1,6 +1,5 @@
 import sublime, sublime_plugin
 import re, itertools
-from functools import partial
 
 last_index = 0
 hints = []
