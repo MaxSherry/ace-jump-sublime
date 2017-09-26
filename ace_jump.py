@@ -1,5 +1,6 @@
 import sublime, sublime_plugin
 import re, itertools
+from functools import partial
 
 last_index = 0
 hints = []
@@ -15,6 +16,12 @@ next_search = False
 mode = 0
 
 ace_jump_active = False
+
+# Labels defined in setting file
+ace_jump_labels = []
+
+# Labels generated dynamically
+ace_jump_active_labels = []
 
 def get_active_views(window, current_buffer_only):
     """Returns all currently visible views"""
@@ -75,6 +82,16 @@ def get_views_sel(views):
     for view in views:
         selections.append(view.sel())
     return selections
+    
+def index_to_cmp(label):
+    """Custom key funtion for list's sort method, returns integer number based on label index
+    of the default label set
+    """
+    global ace_jump_labels
+    index = ace_jump_labels.find(label[0]) + ace_jump_labels.find(label[1])
+    if label[0] == label[1]:
+        index -= 100
+    return index
 
 class AceJumpCommand(sublime_plugin.WindowCommand):
     """Base command class for AceJump plugin"""
@@ -82,6 +99,9 @@ class AceJumpCommand(sublime_plugin.WindowCommand):
     def run(self, current_buffer_only = False):
         global ace_jump_active
         ace_jump_active = True
+
+        global ace_jump_labels
+        ace_jump_labels = []
 
         self.char = ""
         self.target = ""
@@ -99,6 +119,8 @@ class AceJumpCommand(sublime_plugin.WindowCommand):
             "labels",
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
         )
+        ace_jump_labels = self.labels
+        self.double_char_label = settings.get("double_char_label", False)
         self.case_sensitivity = settings.get("search_case_sensitivity", True)
         self.jump_behind_last = settings.get("jump_behind_last_characters", False)
         self.save_files_after_jump = settings.get("save_files_after_jump", False)
@@ -132,6 +154,8 @@ class AceJumpCommand(sublime_plugin.WindowCommand):
     def on_input(self, command):
         """Fires the necessary actions for the current input"""
 
+        global ace_jump_active_labels
+
         if len(command) == 1:
             self.char = command
             if self.char == "<" or self.char == ">":
@@ -141,10 +165,10 @@ class AceJumpCommand(sublime_plugin.WindowCommand):
                 self.add_labels(self.regex().format(re.escape(self.char)))
             return
 
-        if len(command) == 2:
-            self.target = command[1]
-
-        self.window.run_command("hide_panel", {"cancel": True})
+        if ace_jump_active_labels and len(ace_jump_active_labels[0]) == len(command[1:]):
+            self.target = command[1:]
+            self.labels = ace_jump_active_labels
+            self.window.run_command("hide_panel", {"cancel": True})
 
     def submit(self):
         """Handles the behavior after closing the prompt"""
@@ -156,7 +180,7 @@ class AceJumpCommand(sublime_plugin.WindowCommand):
         set_views_syntax(self.all_views, self.syntax)
 
         if self.valid_target(self.target):
-            self.jump(self.labels.find(self.target))
+            self.jump(self.get_index(self.target, self.labels))
 
         mode = 0
         ace_jump_active = False
@@ -189,6 +213,7 @@ class AceJumpCommand(sublime_plugin.WindowCommand):
                 "regex": regex,
                 "region_type": self.region_type,
                 "labels": self.labels,
+                "double_char_label": self.double_char_label,
                 "highlight": self.highlight,
                 "case_sensitive": self.case_sensitivity
             })
@@ -249,15 +274,21 @@ class AceJumpCommand(sublime_plugin.WindowCommand):
 
     def valid_target(self, target):
         """Check if jump target is valid"""
-
-        index = self.labels.find(target)
-
+        index = self.get_index(target, self.labels)
         return target != "" and index >= 0 and index < last_index;
 
     def get_region_type(self):
         """Return region type for labeling"""
 
         return "visible_region"
+
+    def get_index(self, item, sequence):
+        """Return label index in str or list label set"""
+        if isinstance(sequence, str):
+            index = sequence.find(item)
+        elif isinstance(sequence, list):
+            index = sequence.index(item)
+        return index
 
 class AceJumpWordCommand(AceJumpCommand):
     """Specialized command for word-mode"""
@@ -376,12 +407,17 @@ class AceJumpAfterCommand(sublime_plugin.WindowCommand):
 class AddAceJumpLabelsCommand(sublime_plugin.TextCommand):
     """Command for adding labels to the views"""
 
-    def run(self, edit, regex, region_type, labels, highlight, case_sensitive):
+    # Regions after label replacing
+    replaced_regions = []
+
+    def run(self, edit, regex, region_type, labels, double_char_label, highlight, case_sensitive):
         global hints
 
-        characters = self.find(regex, region_type, len(labels), case_sensitive)
-        self.add_labels(edit, characters, labels)
-        self.view.add_regions("ace_jump_hints", characters, highlight)
+        max_labels = len(labels) ** 2 if double_char_label else len(labels)
+        characters = self.find(regex, region_type, max_labels, case_sensitive)
+        self.add_labels(edit, characters, labels, double_char_label)
+        # self.view.add_regions("ace_jump_hints", characters, highlight)
+        self.view.add_regions("ace_jump_hints", self.replaced_regions, highlight)
 
         hints = hints + characters
 
@@ -411,13 +447,35 @@ class AddAceJumpLabelsCommand(sublime_plugin.TextCommand):
 
         return chars
 
-    def add_labels(self, edit, regions, labels):
+    def add_labels(self, edit, regions, labels, double_char_label):
         """Replaces the given regions with labels"""
 
+        global ace_jump_active_labels
+
+        if double_char_label and len(regions) > len(labels):
+            labels = [char_a + char_b for char_a in labels for char_b in labels]
+            labels.sort(key=index_to_cmp)
+            for i, region in enumerate(regions):
+                regions[i] = sublime.Region(region.a, region.b + 1)
+
+        ace_jump_active_labels = labels
+
+        num_region = len(regions)
+        region_offset = 0
+        self.replaced_regions = []
+
         for i in range(len(regions)):
-            self.view.replace(
-                edit, regions[i], labels[last_index + i - len(regions)]
-            )
+            label = labels[last_index + i - num_region]
+            region = regions[i]
+            if region_offset:
+                region = sublime.Region(region.a + region_offset, region.b + region_offset)
+            content = self.view.substr(region)
+            if content[-1] in ('\n', '\r'):
+                # region = sublime.Region(region.a, region.b + 1)
+                label += content[-1]
+                region_offset += 1
+            self.replaced_regions.append(region)
+            self.view.replace(edit, region, label)
 
     def get_target_region(self, region_type):
 
