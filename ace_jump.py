@@ -82,15 +82,20 @@ def get_views_sel(views):
         selections.append(view.sel())
     return selections
     
-def index_to_cmp(label):
-    """Custom key funtion for list's sort method, returns integer number based on label index
-    of the default label set
-    """
-    global ace_jump_labels
-    index = ace_jump_labels.find(label[0]) + ace_jump_labels.find(label[1])
-    if label[0] == label[1]:
-        index -= 100
-    return index
+def sort_double_char_labels(labels):
+    """Sort double char labels based on the order of repeated, lower and other labels"""
+    repeated_char_labels = [label for label in labels if label[0] == label[1]]
+
+    lower_char_labels = [label for label in labels
+                         if label[0].islower() and label[1].islower()
+                         and label not in repeated_char_labels]
+
+    other_labels = [label for label in labels
+                    if label not in repeated_char_labels and label not in lower_char_labels]
+
+    labels = repeated_char_labels + lower_char_labels + other_labels
+
+    return labels
 
 class AceJumpCommand(sublime_plugin.WindowCommand):
     """Base command class for AceJump plugin"""
@@ -453,7 +458,7 @@ class AddAceJumpLabelsCommand(sublime_plugin.TextCommand):
 
         if double_char_label and len(regions) > len(labels):
             labels = [char_a + char_b for char_a in labels for char_b in labels]
-            labels.sort(key=index_to_cmp)
+            labels = sort_double_char_labels(labels)
             for i, region in enumerate(regions):
                 regions[i] = sublime.Region(region.a, region.b + 1)
 
