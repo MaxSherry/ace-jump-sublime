@@ -306,7 +306,7 @@ class AceJumpWordCommand(AceJumpCommand):
         return ""
 
     def regex(self):
-        return r'\b{}'
+        return r'\b{0}|{0}\b|(?<=_){0}|{0}(?=_)'
 
     def after_jump(self, view):
         global mode
