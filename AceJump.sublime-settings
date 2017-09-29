@@ -8,6 +8,9 @@
     // Enable double character label, eg. aa AA aB ...
     "double_char_label": false,
 
+    // Jump to boundary if the char is at the end of a word insteadly
+    "jump_to_boundary": true,
+
     // Toggles case sensitive search in word and character modes.
     "search_case_sensitivity": true,
 

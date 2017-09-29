@@ -125,6 +125,7 @@ class AceJumpCommand(sublime_plugin.WindowCommand):
         )
         ace_jump_labels = self.labels
         self.double_char_label = settings.get("double_char_label", False)
+        self.jump_to_boundary = settings.get("jump_to_boundary", True)
         self.case_sensitivity = settings.get("search_case_sensitivity", True)
         self.jump_behind_last = settings.get("jump_behind_last_characters", False)
         self.save_files_after_jump = settings.get("save_files_after_jump", False)
@@ -258,7 +259,8 @@ class AceJumpCommand(sublime_plugin.WindowCommand):
         view = self.changed_views[self.view_for_index(index)]
 
         self.window.focus_view(view)
-        view.run_command("perform_ace_jump", {"target": region})
+        view.run_command("perform_ace_jump", {"target": region, 
+                                              "jump_to_boundary": self.jump_to_boundary})
         self.after_jump(view)
 
     def views_to_label(self):
@@ -499,15 +501,22 @@ class RemoveAceJumpLabelsCommand(sublime_plugin.TextCommand):
 class PerformAceJumpCommand(sublime_plugin.TextCommand):
     """Command performing the jump"""
 
-    def run(self, edit, target):
+    def run(self, edit, target, jump_to_boundary):
         global mode
         if mode == 0 or mode == 3:
             self.view.sel().clear()
 
-        self.view.sel().add(self.target_region(target))
+        self.view.sel().add(self.target_region(target, jump_to_boundary))
         self.view.show(target)
 
-    def target_region(self, target):
+    def target_region(self, target, jump_to_boundary):
+        if jump_to_boundary:
+            # Check if the target next to boundary, if so, move the target one letter righter to put the 
+            # cursor right on the boundary
+            nextChar = self.view.substr(sublime.Region(target + 1, target + 2))
+            if re.match('[^\w]', nextChar):
+                target += 1
+
         if mode == 1:
             for cursor in self.view.sel():
                 return sublime.Region(cursor.begin(), target)
