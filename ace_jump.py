@@ -373,7 +373,7 @@ class AceJumpWithinLineCommand(AceJumpCommand):
         return " "
 
     def regex(self):
-        return r'\b\w'
+        return r'(?<=[^\w])\w|\w(?=[^\w])'
 
     def after_jump(self, view):
         global mode
