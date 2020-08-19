@@ -1,3 +1,11 @@
+添加这个配置
+// Enable double character label, eg. aa AA aB ...
+"double_char_label": false,
+这个插件在跳转的时候,labels只有26个字母,不够用  
+`https://github.com/ice9js/ace-jump-sublime.git` 这个代码是官方的  
+`https://github.com/kurtontheway/ace-jump-sublime.git` 这个代码是经过修改的  
+需要将两个版本的代码合并一下  
+
 # AceJump
 
 A plugin for Sublime Text 3 heavily inspired by AceJump for emacs.
