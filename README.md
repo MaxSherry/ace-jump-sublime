@@ -8,6 +8,8 @@
 `https://github.com/kurtontheway/ace-jump-sublime.git` 这个代码是经过修改的  
 需要将两个版本的代码合并一下  
 
+https://github.com/ice9js/ace-jump-sublime/pull/68  kurtontheway的修改版本比较老，所以需要将官方的新版本合并一下用最新的。将合并后的整个项目放到sublime的 \Data\Packages\AceJump 这个目录下边即可
+
 # AceJump
 
 A plugin for Sublime Text 3 heavily inspired by AceJump for emacs.
